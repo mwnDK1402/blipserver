@@ -11,7 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check whether hyperlinks are alive
+        shell: bash
         run: |
+          set +e
           # This is where your shell command / script goes
           readonly TIMEOUT=10
           
