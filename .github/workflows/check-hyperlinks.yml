@@ -1,0 +1,99 @@
+name: Check Hyperlinks
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  # Optional: allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether hyperlinks are alive
+        shell: bash
+        run: |
+          set +e
+          # This is where your shell command / script goes
+          readonly TIMEOUT=10
+          
+          # KNOWN ISSUES
+          readonly -a IGNORE=(
+            # Do we still depend on this? The repo is gone.
+            '^https://github.com/esmil/lem-streams.*$'
+            # Unreliable connection
+            '^https://labitat.dk.*$'
+            # No landing page
+            '^http://space.labitat.dk.*$'
+            # gnu.org: Valid but unreliable
+            '^http://www.gnu.org/.*$'
+            # fsf.org: redirects to gnu.org
+            '^http://www.fsf.org/.*$'
+          )
+          ignore_pattern=$(IFS='|'; echo "${IGNORE[*]}")
+          
+          get_status_text() {
+            case "$1" in
+              # Successful (2xx)
+              200) echo "OK" ;;
+              203) echo "Non-Authoritative Information" ;;
+              204) echo "No Content" ;;
+              206) echo "Partial Content" ;;
+          
+              # Redirection (3xx)
+              301) echo "Moved Permanently" ;;
+              302) echo "Found" ;;
+              303) echo "See Other" ;;
+              307) echo "Temporary Redirect" ;;
+              308) echo "Permanent Redirect" ;;
+          
+              # Client Error (4xx)
+              400) echo "Bad Request" ;;
+              401) echo "Unauthorized" ;;
+              403) echo "Forbidden" ;;
+              404) echo "Not Found" ;;
+              405) echo "Method Not Allowed" ;;
+              408) echo "Request Timeout" ;;
+              410) echo "Gone" ;;
+              429) echo "Too Many Requests" ;;
+          
+              # Server Error (5xx)
+              500) echo "Internal Server Error" ;;
+              502) echo "Bad Gateway" ;;
+              503) echo "Service Unavailable" ;;
+              504) echo "Gateway Timeout" ;;
+          
+              *)   echo "Unexpected Status" ;;
+            esac
+          }
+          
+          fmt="%-50s %-8s %-20s %-48s\n"
+          printf "$fmt" 'URL' 'CODE' 'STATUS' 'REDIRECTED'
+          printf "$fmt" '---' '---' '---' '---'
+          
+          for url in "${IGNORE[@]}"; do
+            printf "$fmt" "$url" '---' 'Ignored' '---'
+          done
+          
+          failed=0
+          
+          while read -r url; do
+            if [[ "$url" =~ ^($ignore_pattern)$ ]]; then
+              continue
+            fi
+          
+            read -r code final_url < <(curl -L -s -o /dev/null -w '%{http_code} %{url_effective}' --max-time "$TIMEOUT" "$url")
+            status="$(get_status_text "$code")"
+          
+            if [[ "$code" != "200" ]]; then
+              failed=1
+            fi
+          
+            if [[ "$url" == "$final_url" ]]; then
+              printf "$fmt" "$url" "$code" "$status" '---'
+            else
+              printf "$fmt" "$url" "$code" "$status" "$final_url"
+            fi
+          done < <(grep -rEoh --exclude-dir=.git 'https?://[a-zA-Z0-9./?=&#:_%+-]+' * | sort -u)
+          
+          exit $failed
