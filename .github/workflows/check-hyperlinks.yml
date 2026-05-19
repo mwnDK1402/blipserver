@@ -26,9 +26,9 @@ jobs:
             # No landing page
             '^http://space.labitat.dk.*$'
             # gnu.org: Valid but unreliable
-            '^http://www.gnu.org/.*$'
+            '^http://www.gnu.org.*$'
             # fsf.org: redirects to gnu.org
-            '^http://www.fsf.org/.*$'
+            '^http://www.fsf.org.*$'
           )
           ignore_pattern=$(IFS='|'; echo "${IGNORE[*]}")
           
